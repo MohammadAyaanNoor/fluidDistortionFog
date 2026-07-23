@@ -1,0 +1,57 @@
+uniform float uTime;
+uniform sampler2D uTexture1;
+uniform sampler2D uTexture2;
+uniform sampler2D uTexture3;
+varying vec2 vUv;
+
+vec3 screenBlend(vec3 a, vec3 b)
+{
+    return 1.0 - (1.0 - a) * (1.0 - b);
+}
+void main() {
+    float speed = uTime * 0.02;
+
+    // Cloud 1
+    vec2 uv1 = vUv;
+    uv1.x = fract(uv1.x + speed);
+
+    // Cloud 2 shifted to the right
+    vec2 uv2 = vUv;
+    vec2 uv3 = vUv;
+    uv2.x = fract(uv2.x + speed - 0.45);
+    uv2.y = fract(uv2.y - 0.45);
+    uv3 = (uv3 - 0.5) * 0.9 + 0.5;
+
+// Move image downward
+// uv3.y += 0.2;
+    vec4 bg = texture2D(uTexture3, uv3);
+    bg.rgb *= 1.1;
+    bg.rgb = pow(bg.rgb, vec3(0.8));
+    vec4 c1 = texture2D(uTexture1, uv1);
+    vec4 c2 = texture2D(uTexture2, uv2);
+
+    //  vec4 clouds = c1 + c2 * (1.0 - c1.a);
+     vec3 rgb = screenBlend(c1.rgb, c2.rgb);
+float alpha = max(c1.a, c2.a);
+
+vec4 clouds = vec4(rgb, alpha);
+    // Darken clouds a bit
+    float topLight = smoothstep(0.0, 0.8, vUv.y);
+
+clouds.rgb += topLight * 0.15;
+    clouds.rgb *= 1.6;
+    vec3 fogTint = vec3(0.95, 0.97, 0.92);
+
+// clouds.rgb *= fogTint;
+
+    // Optional: make fog softer
+    clouds.a *= 0.7;
+   
+
+    vec4 finalColor = mix(bg, clouds, clouds.a);
+
+// Reduce brightness to 60%
+    // color.rgb *= 0.2;
+
+    gl_FragColor = finalColor;
+}
