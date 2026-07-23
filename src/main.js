@@ -8,6 +8,7 @@ import {
   RenderPass,
   ShaderPass,
   UnrealBloomPass,
+  FilmPass
 } from "three/examples/jsm/Addons.js";
 import GUI from "lil-gui";
 
@@ -40,6 +41,14 @@ background1.wrapT = THREE.ClampToEdgeWrapping;
 
 const scene = new THREE.Scene();
 
+const sizes = {
+  width: window.innerWidth,
+  height: window.innerHeight,
+};
+
+const imageWidth = 3200; 
+const imageHeight = 3200;
+
 const plane1 = new THREE.Mesh(
   new THREE.PlaneGeometry(2, 2),
   new THREE.ShaderMaterial({
@@ -52,6 +61,8 @@ const plane1 = new THREE.Mesh(
       uTexture1: new THREE.Uniform(cloud1),
       uTexture2: new THREE.Uniform(cloud2),
       uTexture3: new THREE.Uniform(background1),
+      uResolution: new THREE.Uniform(new THREE.Vector2(sizes.width, sizes.height)),
+      uImageResolution: new THREE.Uniform(new THREE.Vector2(imageWidth, imageHeight)),
       uTime: new THREE.Uniform(0),
     },
     side: THREE.DoubleSide,
@@ -59,10 +70,7 @@ const plane1 = new THREE.Mesh(
 );
 scene.add(plane1);
 
-const sizes = {
-  width: window.innerWidth,
-  height: window.innerHeight,
-};
+
 
 const trailTarget = new THREE.WebGLRenderTarget(sizes.width, sizes.height, {
   minFilter: THREE.LinearFilter,
@@ -363,6 +371,60 @@ gui.add(tintPass.material.uniforms.uTint.value, "x", 0, 1, 0.001).name("red");
 gui.add(tintPass.material.uniforms.uTint.value, "y", 0, 1, 0.001).name("green");
 gui.add(tintPass.material.uniforms.uTint.value, "z", 0, 1, 0.001).name("blue");
 
+const filmPass = new FilmPass(
+    0.15,   // noise intensity
+    0.0,    // scanline intensity (set to 0 to remove the TV look)
+    0,      // scanline count
+    true   // grayscale (set to false to keep your scene's color)
+);
+// effectComposer.addPass(filmPass);
+
+// gui.add(filmPass.uniforms.nIntensity, 'value', 0, 1, 0.01).name('Grain Intensity');
+
+
+// --- STATIC FILM GRAIN & BRIGHTNESS PASS ---
+const grainShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uIntensity: { value: 0.08 },
+    uBrightness: { value: 0.75 }, // 1.0 is normal. Lower values (e.g., 0.8) make it darker.
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      vUv = uv;
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uIntensity;
+    uniform float uBrightness;
+    varying vec2 vUv;
+
+    // Pseudo-random noise function
+    float random(vec2 uv) {
+      return fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453);
+    }
+
+    void main() {
+      // 1. Get the scene's current color
+      vec4 color = texture2D(tDiffuse, vUv);
+      
+      // 2. Darken the scene by multiplying the RGB values
+      color.rgb *= uBrightness;
+      
+      // 3. Generate and apply the static noise
+      float noise = random(vUv) - 0.5; 
+      color.rgb += noise * uIntensity;
+      
+      gl_FragColor = color;
+    }
+  `,
+};
+
+const grainPass = new ShaderPass(grainShader);
+effectComposer.addPass(grainPass);
 
 const clock = new THREE.Clock();
 
